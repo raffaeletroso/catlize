@@ -163,14 +163,17 @@ export default function App() {
   useEffect(() => { showToastRef.current = showToast; });
 
   useEffect(() => {
-    history.replaceState({ catlize: true }, '');
-    history.pushState({ catlize: true }, '');
-    let bouncing = false;
-    const onPop = () => {
-      if (bouncing) { bouncing = false; return; }
+    // Maintain a fixed 2-entry history: ['base', 'top']
+    // Real back press always lands on 'base'; go(1) bounce lands on 'top'
+    history.replaceState({ catlize: 'base' }, '');
+    history.pushState({ catlize: 'top' }, '');
+
+    const onPop = (e) => {
+      if (e.state?.catlize === 'top') return; // bounce from our go(1), ignore
+      // Real back press — currently at 'base'
       const { overlay: o, base: b, editing: ed } = appStateRef.current;
       if (o === 'detail') {
-        bouncing = true; history.go(1);
+        history.go(1);
         appStateRef.current = { ...appStateRef.current, overlay: null };
         setOverlay(null);
         if (ed?.source === 'capture') {
@@ -178,21 +181,22 @@ export default function App() {
           setActiveCol(ed.item.collection); setBrowseAll(false); setBase('browse');
         }
       } else if (o === 'capture') {
-        bouncing = true; history.go(1);
+        history.go(1);
         appStateRef.current = { ...appStateRef.current, overlay: null };
         setOverlay(null);
       } else if (b === 'browse') {
-        bouncing = true; history.go(1);
+        history.go(1);
         appStateRef.current = { ...appStateRef.current, base: 'home' };
         setBase('home');
       } else {
-        // At home: double-back to exit
+        // At home
         const now = Date.now();
         if (now - lastBackAtHome.current < 2000) {
-          // second press — let browser exit (no go(1))
+          lastBackAtHome.current = 0;
+          history.back(); // exit: go before 'base', browser closes PWA
         } else {
-          bouncing = true; history.go(1);
           lastBackAtHome.current = now;
+          history.go(1); // bounce back to 'top', stay in app
           showToastRef.current?.('Premi ancora per uscire');
         }
       }
