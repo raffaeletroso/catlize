@@ -35,7 +35,14 @@ export default function App() {
   const [editing, setEditing] = useState(null);
   const [autoAdd, setAutoAdd] = useState(true);
   const [browseAll, setBrowseAll] = useState(false);
-  const [items, setItems] = useState(SEED_ITEMS);
+  const [items, setItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem('catlize_items');
+      return saved ? JSON.parse(saved) : SEED_ITEMS;
+    } catch {
+      return SEED_ITEMS;
+    }
+  });
   const [view, setView] = useState('grid');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState('recent');
@@ -49,6 +56,12 @@ export default function App() {
     window.addEventListener('resize', on);
     return () => window.removeEventListener('resize', on);
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('catlize_items', JSON.stringify(items));
+    } catch {}
+  }, [items]);
 
   const counts = useMemo(() => {
     const c = {};
