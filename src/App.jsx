@@ -166,6 +166,7 @@ export default function App() {
     // Maintain a fixed 2-entry history: ['base', 'top']
     // Real back press always lands on 'base'; go(1) bounce lands on 'top'
     history.replaceState({ catlize: 'base' }, '');
+    history.pushState({ catlize: 'base' }, ''); // safety buffer
     history.pushState({ catlize: 'top' }, '');
 
     const onPop = (e) => {
