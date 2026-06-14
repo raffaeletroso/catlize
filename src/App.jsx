@@ -165,11 +165,12 @@ export default function App() {
   useEffect(() => {
     history.replaceState({ catlize: true }, '');
     history.pushState({ catlize: true }, '');
+    let bouncing = false;
     const onPop = () => {
+      if (bouncing) { bouncing = false; return; }
       const { overlay: o, base: b, editing: ed } = appStateRef.current;
-      console.log('[back]', { overlay: o, base: b });
       if (o === 'detail') {
-        history.pushState({ catlize: true }, '');
+        bouncing = true; history.go(1);
         appStateRef.current = { ...appStateRef.current, overlay: null };
         setOverlay(null);
         if (ed?.source === 'capture') {
@@ -177,20 +178,20 @@ export default function App() {
           setActiveCol(ed.item.collection); setBrowseAll(false); setBase('browse');
         }
       } else if (o === 'capture') {
-        history.pushState({ catlize: true }, '');
+        bouncing = true; history.go(1);
         appStateRef.current = { ...appStateRef.current, overlay: null };
         setOverlay(null);
       } else if (b === 'browse') {
-        history.pushState({ catlize: true }, '');
+        bouncing = true; history.go(1);
         appStateRef.current = { ...appStateRef.current, base: 'home' };
         setBase('home');
       } else {
         // At home: double-back to exit
         const now = Date.now();
         if (now - lastBackAtHome.current < 2000) {
-          // Second press within 2s — let the browser close the app (no re-push)
+          // second press — let browser exit (no go(1))
         } else {
-          history.pushState({ catlize: true }, '');
+          bouncing = true; history.go(1);
           lastBackAtHome.current = now;
           showToastRef.current?.('Premi ancora per uscire');
         }
