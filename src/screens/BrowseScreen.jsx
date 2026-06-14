@@ -3,11 +3,25 @@ import { Icon } from '../icons.jsx';
 import { Thumb } from '../ui.jsx';
 import { COLLECTIONS, COL, itemTitle, itemSubs, thumbLabel } from '../data.js';
 
+function CardThumb({ it }) {
+  if (it._coverUrl) {
+    return <img src={it._coverUrl} className="cz-card-thumb cz-card-thumb--img" alt="" loading="lazy" />;
+  }
+  return <Thumb className="cz-card-thumb" label={thumbLabel(it.collection)} />;
+}
+
+function RowThumb({ it }) {
+  if (it._coverUrl) {
+    return <img src={it._coverUrl} className="cz-rowitem-thumb cz-rowitem-thumb--img" alt="" loading="lazy" />;
+  }
+  return <Thumb className="cz-rowitem-thumb" label="" showIcon={false} />;
+}
+
 function CardItem({ it, onOpen, showTag }) {
   const subs = itemSubs(it).slice(0, 2);
   return (
     <button className="cz-card" onClick={() => onOpen(it)}>
-      <Thumb className="cz-card-thumb" label={thumbLabel(it.collection)} />
+      <CardThumb it={it} />
       <div className="cz-card-body">
         {showTag && <div className="cz-card-tag">{COL[it.collection].short}</div>}
         <div className="cz-card-title">{itemTitle(it)}</div>
@@ -23,7 +37,7 @@ function RowItem({ it, onOpen, showTag }) {
     : itemSubs(it);
   return (
     <button className="cz-rowitem" onClick={() => onOpen(it)}>
-      <Thumb className="cz-rowitem-thumb" label="" showIcon={false} />
+      <RowThumb it={it} />
       <div className="cz-rowitem-main">
         <div className="cz-rowitem-title">{itemTitle(it)}</div>
         <div className="cz-rowitem-sub">{subs.join(' · ')}</div>

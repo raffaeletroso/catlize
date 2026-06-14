@@ -614,3 +614,11 @@ button{font-family:inherit}
   transition:.12s;text-align:center;
 }
 .cz-result-skip:hover{color:rgba(255,255,255,.7)}
+
+/* ── Cover image in grid/list cards ── */
+.cz-card-thumb--img{
+  object-fit:cover;display:block;
+}
+.cz-rowitem-thumb--img{
+  object-fit:cover;border-radius:7px;display:block;
+}
