@@ -2,6 +2,7 @@ import React from 'react';
 import { Icon } from '../icons.jsx';
 import { Thumb } from '../ui.jsx';
 import { COLLECTIONS, thumbLabel } from '../data.js';
+import { VERSION } from '../version.js';
 
 function Tile({ c, count, style, onOpen }) {
   const countTxt = `${count} ${count === 1 ? 'pezzo' : 'pezzi'}`;
@@ -52,7 +53,10 @@ export function HomeScreen({ counts, tileStyle, onOpen, dark, onToggleTheme, dri
         <div className="cz-topbar-row">
           <div className="cz-brand cz-hide-wide" style={{ padding: 0, gap: 9 }}>
             <div className="cz-logo" style={{ width: 28, height: 28 }}><Icon name="layers" size={17} stroke={2.2} /></div>
-            <b style={{ fontSize: 18 }}>catlize</b>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <b style={{ fontSize: 18, lineHeight: 1 }}>catlize</b>
+              <span style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 500, letterSpacing: '.02em' }}>v{VERSION}</span>
+            </div>
           </div>
           <div className="cz-grow" />
           <button className="cz-iconbtn cz-hide-wide" onClick={onToggleTheme} title="Tema">
