@@ -364,7 +364,35 @@ button{font-family:inherit}
 .cz-viewfinder{flex:1;position:relative;display:flex;align-items:center;justify-content:center;
   background:
     radial-gradient(120% 90% at 50% 35%,rgba(255,255,255,.06),transparent 60%),
-    repeating-linear-gradient(135deg,#141417 0 16px,#171719 16px 32px)}
+    repeating-linear-gradient(135deg,#141417 0 16px,#171719 16px 32px);
+  overflow:hidden}
+
+/* live video feed & captured image preview */
+.cz-vf-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
+
+/* reticle/objframe overlaid on top of video */
+.cz-reticle-overlay,.cz-objframe-overlay{position:absolute;z-index:2}
+
+/* loading / status */
+.cz-cam-status{display:flex;flex-direction:column;align-items:center;gap:14px;
+  color:rgba(255,255,255,.75);font-size:14px;font-weight:500}
+
+/* permission denied */
+.cz-cam-denied{display:flex;flex-direction:column;align-items:center;gap:12px;
+  text-align:center;padding:0 32px;max-width:360px}
+.cz-cam-denied-ico{width:64px;height:64px;border-radius:18px;display:grid;place-items:center;
+  background:rgba(255,255,255,.1);color:rgba(255,255,255,.6)}
+.cz-cam-denied-title{font-size:17px;font-weight:600;color:#fff;margin:0}
+.cz-cam-denied-sub{font-size:13.5px;color:rgba(255,255,255,.6);line-height:1.5;margin:0}
+
+/* confirm bar (rifai / usa foto) */
+.cz-cap-confirm{position:absolute;bottom:calc(108px + env(safe-area-inset-bottom));
+  left:50%;transform:translateX(-50%);z-index:4;
+  display:flex;gap:12px;backdrop-filter:blur(12px)}
+.cz-cap-confirm-btn{height:46px;border-radius:12px;font-size:15px}
+.cz-cap-confirm .cz-btn-ghost{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:#fff}
+.cz-cap-confirm .cz-btn-ghost:hover{background:rgba(255,255,255,.25)}
+
 .cz-vf-hint{position:absolute;bottom:150px;left:0;right:0;text-align:center;
   font-size:13.5px;color:rgba(255,255,255,.7);padding:0 30px;z-index:3}
 @container (min-width:768px){.cz-vf-hint{bottom:130px}}

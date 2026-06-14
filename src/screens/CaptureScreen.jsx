@@ -1,16 +1,127 @@
-import React from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Icon } from '../icons.jsx';
 import { Thumb } from '../ui.jsx';
 import { COLLECTIONS, COL, FIELD_SCHEMA, IMAGE_SLOTS } from '../data.js';
 import { BarcodeBars } from '../ui.jsx';
 
+// ─── Camera hook ────────────────────────────────────────────────────────────
+function useCamera() {
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const canvasRef = useRef(null);
+  // 'idle' | 'loading' | 'live' | 'denied' | 'unsupported' | 'captured'
+  const [camState, setCamState] = useState('idle');
+  const [capturedImg, setCapturedImg] = useState(null);
+  const [facingMode, setFacingMode] = useState('environment');
+
+  const stop = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
+  const start = useCallback(async (facing = 'environment') => {
+    stop();
+    setCapturedImg(null);
+    setCamState('loading');
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCamState('unsupported');
+      return;
+    }
+
+    const constraints = { video: { facingMode: { ideal: facing } }, audio: false };
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setCamState('live');
+    } catch (err) {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setCamState('denied');
+      } else {
+        // Fallback: try without facingMode constraint
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          streamRef.current = stream;
+          if (videoRef.current) videoRef.current.srcObject = stream;
+          setCamState('live');
+        } catch {
+          setCamState('denied');
+        }
+      }
+    }
+  }, [stop]);
+
+  const capture = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || !video.videoWidth) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+    setCapturedImg(dataUrl);
+    setCamState('captured');
+    stop();
+  }, [stop]);
+
+  const retake = useCallback(() => {
+    setCapturedImg(null);
+    start(facingMode);
+  }, [start, facingMode]);
+
+  const flipCamera = useCallback(() => {
+    const next = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(next);
+    start(next);
+  }, [facingMode, start]);
+
+  // Stop stream on unmount
+  useEffect(() => () => stop(), [stop]);
+
+  return { videoRef, canvasRef, camState, capturedImg, start, capture, retake, flipCamera };
+}
+
+// ─── CaptureScreen ──────────────────────────────────────────────────────────
 export function CaptureScreen({ capCol, setCapCol, status, onShutter, onClose, autoAdd, setAutoAdd }) {
   const c = capCol ? COL[capCol] : null;
   const barcode = c && c.capture === 'barcode';
   const slots = capCol ? IMAGE_SLOTS[capCol] : [];
 
+  const { videoRef, canvasRef, camState, capturedImg, start, capture, retake, flipCamera } = useCamera();
+
+  // Start camera when a collection is first selected
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (!capCol) return;
+    if (startedRef.current) return; // already running, keep stream alive across collection switch
+    startedRef.current = true;
+    start('environment');
+  }, [capCol, start]);
+
+  const handleShutter = () => {
+    if (camState === 'live') {
+      capture();
+    }
+  };
+
+  const handleConfirm = () => {
+    // Pass captured image along via onShutter — parent runs recognition simulation
+    onShutter(capturedImg);
+  };
+
+  const isLive = camState === 'live';
+  const isCaptured = camState === 'captured';
+  const isDenied = camState === 'denied' || camState === 'unsupported';
+  const shutterDisabled = !capCol || (!isLive && !isCaptured) || status === 'recognizing';
+
   return (
     <div className="cz-capture">
+      {/* ── Top controls ── */}
       <div className="cz-cap-top">
         <div className="cz-cap-toprow">
           <button className="cz-cap-x" onClick={onClose} title="Chiudi"><Icon name="x" size={20} /></button>
@@ -35,41 +146,116 @@ export function CaptureScreen({ capCol, setCapCol, status, onShutter, onClose, a
         </div>
       </div>
 
+      {/* ── Viewfinder ── */}
       <div className="cz-viewfinder">
-        {!capCol ? (
+        {/* Live video — always in DOM so srcObject assignment works */}
+        <video
+          ref={videoRef}
+          className="cz-vf-video"
+          autoPlay
+          playsInline
+          muted
+          style={{ display: isLive ? 'block' : 'none' }}
+        />
+
+        {/* Captured frame preview */}
+        {isCaptured && capturedImg && (
+          <img src={capturedImg} className="cz-vf-video" alt="Foto scattata" />
+        )}
+
+        {/* No collection selected */}
+        {!capCol && (
           <div className="cz-cap-nocol">Seleziona una raccolta per iniziare</div>
-        ) : barcode ? (
-          <div className="cz-reticle">
-            <span className="cz-corner tl" /><span className="cz-corner tr" />
-            <span className="cz-corner bl" /><span className="cz-corner br" />
-            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-              <BarcodeBars />
-            </div>
-            <div className="cz-scanline" />
-          </div>
-        ) : (
-          <div className="cz-objframe">
-            <span className="cz-corner tl" /><span className="cz-corner tr" />
-            <span className="cz-corner bl" /><span className="cz-corner br" />
+        )}
+
+        {/* Camera loading */}
+        {capCol && camState === 'loading' && (
+          <div className="cz-cam-status">
+            <div className="cz-spinner" style={{ borderTopColor: '#fff' }} />
+            <span>Avvio fotocamera…</span>
           </div>
         )}
-        {capCol && (
+
+        {/* Permission denied */}
+        {capCol && isDenied && (
+          <div className="cz-cam-denied">
+            <div className="cz-cam-denied-ico">
+              <Icon name="camera" size={30} stroke={1.8} />
+            </div>
+            <p className="cz-cam-denied-title">Fotocamera non accessibile</p>
+            <p className="cz-cam-denied-sub">
+              {camState === 'unsupported'
+                ? 'Il tuo browser non supporta l\'accesso alla fotocamera.'
+                : 'Hai negato l\'accesso alla fotocamera. Per abilitarla, vai nelle impostazioni del browser e consenti l\'accesso alla fotocamera per questo sito, poi ricarica la pagina.'}
+            </p>
+          </div>
+        )}
+
+        {/* Reticle overlay (on top of video) */}
+        {capCol && isLive && (
+          barcode ? (
+            <div className="cz-reticle cz-reticle-overlay">
+              <span className="cz-corner tl" /><span className="cz-corner tr" />
+              <span className="cz-corner bl" /><span className="cz-corner br" />
+              <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
+                <BarcodeBars />
+              </div>
+              <div className="cz-scanline" />
+            </div>
+          ) : (
+            <div className="cz-objframe cz-objframe-overlay">
+              <span className="cz-corner tl" /><span className="cz-corner tr" />
+              <span className="cz-corner bl" /><span className="cz-corner br" />
+            </div>
+          )
+        )}
+
+        {/* Hint text */}
+        {capCol && isLive && (
           <div className="cz-vf-hint">
             {barcode
               ? 'Inquadra il codice a barre sul retro del disco'
               : `Inquadra ${slots.length > 1 ? 'il fronte del' : "l'intero"} ${c && c.singular} nel riquadro`}
           </div>
         )}
+
+        {/* Confirm / retake bar shown over captured image */}
+        {isCaptured && (
+          <div className="cz-cap-confirm">
+            <button className="cz-btn cz-btn-ghost cz-cap-confirm-btn" onClick={retake}>
+              <Icon name="flip" size={18} stroke={2.1} /> Rifai
+            </button>
+            <button className="cz-btn cz-btn-primary cz-cap-confirm-btn" onClick={handleConfirm}>
+              <Icon name="check" size={18} stroke={2.4} /> Usa foto
+            </button>
+          </div>
+        )}
       </div>
 
+      {/* Hidden canvas for frame capture */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+      {/* ── Shutter bar ── */}
       <div className="cz-cap-bottom">
-        <button className="cz-cap-side" title="Galleria"><Icon name="image" size={22} stroke={2.1} /></button>
-        <button className="cz-shutter" onClick={onShutter} disabled={!capCol} aria-label="Scatta"><span /></button>
-        <button className="cz-cap-side" title={barcode ? 'Inserisci a mano' : 'Cambia fotocamera'}>
-          <Icon name={barcode ? 'pencil' : 'flip'} size={22} stroke={2.1} />
+        <button className="cz-cap-side" title="Galleria" style={{ opacity: 0.4, cursor: 'default' }}>
+          <Icon name="image" size={22} stroke={2.1} />
+        </button>
+        <button
+          className="cz-shutter"
+          onClick={handleShutter}
+          disabled={shutterDisabled}
+          aria-label="Scatta"
+          style={{ display: isCaptured ? 'none' : 'grid' }}
+        >
+          <span />
+        </button>
+        {isCaptured && <div style={{ width: 74, height: 74 }} />}
+        <button className="cz-cap-side" title="Cambia fotocamera" onClick={flipCamera} disabled={!isLive}>
+          <Icon name="flip" size={22} stroke={2.1} />
         </button>
       </div>
 
+      {/* ── Recognizing overlay ── */}
       {status === 'recognizing' && (
         <div className="cz-recog">
           <div className="cz-spinner" />
@@ -83,6 +269,7 @@ export function CaptureScreen({ capCol, setCapCol, status, onShutter, onClose, a
   );
 }
 
+// ─── Field ──────────────────────────────────────────────────────────────────
 function Field({ field, item, set }) {
   if (field.row) {
     return (
@@ -114,6 +301,7 @@ function Field({ field, item, set }) {
   );
 }
 
+// ─── CustomFields ────────────────────────────────────────────────────────────
 function CustomFields({ item, onChange }) {
   const custom = item.custom || [];
   const update = (i, patch) => {
@@ -142,6 +330,7 @@ function CustomFields({ item, onChange }) {
   );
 }
 
+// ─── DetailScreen ────────────────────────────────────────────────────────────
 export function DetailScreen({ item, mode, onChange, onSave, onClose, onDelete }) {
   const c = COL[item.collection];
   const schema = FIELD_SCHEMA[item.collection];
@@ -172,7 +361,6 @@ export function DetailScreen({ item, mode, onChange, onSave, onClose, onDelete }
             </div>
           )}
         </div>
-
         <div className="cz-fields">
           {schema.map((f, i) => <Field key={f.key || 'row' + i} field={f} item={item} set={set} />)}
           {item.collection === 'altro' && <CustomFields item={item} onChange={onChange} />}

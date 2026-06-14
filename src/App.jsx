@@ -88,11 +88,12 @@ export default function App() {
     setOverlay('capture');
   };
 
-  const shutter = () => {
+  const shutter = (capturedImg) => {
     if (capStatus === 'recognizing') return;
     setCapStatus('recognizing');
     setTimeout(() => {
       const rec = recognise(capCol);
+      if (capturedImg) rec._photo = capturedImg;
       if (autoAdd) {
         const saved = { ...rec }; delete saved._new;
         setItems((p) => [...p, saved]);
