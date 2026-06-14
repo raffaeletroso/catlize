@@ -158,20 +158,35 @@ export default function App() {
   // History management for device back button
   const appStateRef = useRef({ base: 'home', overlay: null, editing: null });
   useEffect(() => { appStateRef.current = { base, overlay, editing }; }, [base, overlay, editing]);
+  const lastBackAtHome = useRef(0);
+  const showToastRef = useRef(null);
+  useEffect(() => { showToastRef.current = showToast; });
 
   useEffect(() => {
     history.replaceState({ catlize: true }, '');
     history.pushState({ catlize: true }, '');
     const onPop = () => {
-      history.pushState({ catlize: true }, ''); // re-push to stay in app
       const { overlay: o, base: b, editing: ed } = appStateRef.current;
       if (o === 'detail') {
+        history.pushState({ catlize: true }, '');
         setOverlay(null);
         if (ed?.source === 'capture') { setActiveCol(ed.item.collection); setBrowseAll(false); setBase('browse'); }
       } else if (o === 'capture') {
+        history.pushState({ catlize: true }, '');
         setOverlay(null);
       } else if (b === 'browse') {
+        history.pushState({ catlize: true }, '');
         setBase('home');
+      } else {
+        // At home: double-back to exit
+        const now = Date.now();
+        if (now - lastBackAtHome.current < 2000) {
+          // Second press within 2s — let the browser close the app (no re-push)
+        } else {
+          history.pushState({ catlize: true }, '');
+          lastBackAtHome.current = now;
+          showToastRef.current?.('Premi ancora per uscire');
+        }
       }
     };
     window.addEventListener('popstate', onPop);
