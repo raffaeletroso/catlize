@@ -169,13 +169,19 @@ export default function App() {
       const { overlay: o, base: b, editing: ed } = appStateRef.current;
       if (o === 'detail') {
         history.pushState({ catlize: true }, '');
+        appStateRef.current = { ...appStateRef.current, overlay: null };
         setOverlay(null);
-        if (ed?.source === 'capture') { setActiveCol(ed.item.collection); setBrowseAll(false); setBase('browse'); }
+        if (ed?.source === 'capture') {
+          appStateRef.current = { ...appStateRef.current, base: 'browse' };
+          setActiveCol(ed.item.collection); setBrowseAll(false); setBase('browse');
+        }
       } else if (o === 'capture') {
         history.pushState({ catlize: true }, '');
+        appStateRef.current = { ...appStateRef.current, overlay: null };
         setOverlay(null);
       } else if (b === 'browse') {
         history.pushState({ catlize: true }, '');
+        appStateRef.current = { ...appStateRef.current, base: 'home' };
         setBase('home');
       } else {
         // At home: double-back to exit
