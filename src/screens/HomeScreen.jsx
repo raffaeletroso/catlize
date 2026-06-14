@@ -34,7 +34,7 @@ function Tile({ c, count, style, onOpen, coverUrl }) {
   return (
     <button className="cz-tile" data-variant="cover" onClick={open}>
       {coverUrl
-        ? <img src={coverUrl} className="cz-tile-thumb" style={{ objectFit: 'cover' }} alt="" loading="lazy" />
+        ? <img src={coverUrl} className="cz-tile-thumb" style={{ objectFit: 'cover', display: 'block' }} alt="" />
         : <Thumb className="cz-tile-thumb" label={thumbLabel(c.id)} />}
       <div className="cz-tile-body">
         <div className="cz-tile-ico"><Icon name={c.icon} size={18} stroke={2.1} /></div>
