@@ -216,7 +216,7 @@ export default function App() {
     const scale = Math.min(1, (vp.w - pad) / dev.w, (vp.h - pad) / dev.h);
     frameStyle = { width: dev.w, height: dev.h, borderRadius: dev.r, transform: `scale(${scale})` };
   } else {
-    frameStyle = { width: '100vw', height: '100dvh', borderRadius: 0 };
+    frameStyle = { position: 'absolute', inset: 0, borderRadius: 0 };
   }
 
   const collection = browseAll ? ALL_COLLECTION : COL[activeCol];
