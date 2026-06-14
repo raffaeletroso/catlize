@@ -552,7 +552,7 @@ button{font-family:inherit}
 .cz-viewfinder--search{
   background:#0a0a0b;align-items:flex-start;justify-content:flex-start;overflow-y:auto;
 }
-.cz-search-panel{width:100%;padding:20px 16px;display:flex;flex-direction:column;gap:14px;min-height:100%}
+.cz-search-panel{width:100%;padding:16px;display:flex;flex-direction:column;gap:14px}
 @container (min-width:768px){.cz-search-panel{padding:24px 24px}}
 
 .cz-search-form{display:flex;flex-direction:column;gap:10px}

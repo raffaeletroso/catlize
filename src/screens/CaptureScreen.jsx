@@ -292,7 +292,8 @@ export function CaptureScreen({ capCol, setCapCol, onShutter, onClose }) {
   return (
     <div className="cz-capture">
       {/* ── Top controls ── */}
-      <div className="cz-cap-top">
+      {/* In search mode: flow layout (not absolute) so it doesn't overlay the form */}
+      <div className="cz-cap-top" style={!showCamera ? { position: 'relative', background: 'rgba(0,0,0,.7)', paddingBottom: 14 } : {}}>
         <div className="cz-cap-toprow">
           <button className="cz-cap-x" onClick={onClose} title="Chiudi"><Icon name="x" size={20} /></button>
           {isDischi ? (
@@ -327,11 +328,7 @@ export function CaptureScreen({ capCol, setCapCol, onShutter, onClose }) {
             )}
           </div>
         )}
-        {!showCamera && (
-          <div className="cz-chiprow" style={{ justifyContent: 'center', paddingTop: 4 }}>
-            <span style={{ color: 'rgba(255,255,255,.6)', fontSize: 13 }}>Discogs — ricerca testuale</span>
-          </div>
-        )}
+        {!showCamera && null}
       </div>
 
       {/* ── Search panel (solo dischi + search mode) ── */}
