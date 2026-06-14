@@ -4,7 +4,7 @@ import { Thumb } from '../ui.jsx';
 import { COLLECTIONS, thumbLabel } from '../data.js';
 import { VERSION } from '../version.js';
 
-function Tile({ c, count, style, onOpen }) {
+function Tile({ c, count, style, onOpen, coverUrl }) {
   const countTxt = `${count} ${count === 1 ? 'pezzo' : 'pezzi'}`;
   const open = () => onOpen(c.id);
 
@@ -33,7 +33,9 @@ function Tile({ c, count, style, onOpen }) {
   }
   return (
     <button className="cz-tile" data-variant="cover" onClick={open}>
-      <Thumb className="cz-tile-thumb" label={thumbLabel(c.id)} />
+      {coverUrl
+        ? <img src={coverUrl} className="cz-tile-thumb" style={{ objectFit: 'cover' }} alt="" loading="lazy" />
+        : <Thumb className="cz-tile-thumb" label={thumbLabel(c.id)} />}
       <div className="cz-tile-body">
         <div className="cz-tile-ico"><Icon name={c.icon} size={18} stroke={2.1} /></div>
         <div className="cz-tile-txt">
@@ -45,8 +47,15 @@ function Tile({ c, count, style, onOpen }) {
   );
 }
 
-export function HomeScreen({ counts, tileStyle, onOpen, dark, onToggleTheme, driveAuthed, driveSyncing, onConnectDrive, onDisconnectDrive }) {
+export function HomeScreen({ counts, items = [], tileStyle, onOpen, dark, onToggleTheme, driveAuthed, driveSyncing, onConnectDrive, onDisconnectDrive }) {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const coverByCol = {};
+  for (const c of COLLECTIONS) {
+    const cover = items
+      .filter((it) => it.collection === c.id && it._coverUrl)
+      .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }))[0]?._coverUrl || null;
+    coverByCol[c.id] = cover;
+  }
   return (
     <div className="cz-main">
       <div className="cz-topbar">
@@ -71,7 +80,7 @@ export function HomeScreen({ counts, tileStyle, onOpen, dark, onToggleTheme, dri
       <div className="cz-scroll" style={{ paddingBottom: 24 }}>
         <div className="cz-tiles" data-style={tileStyle}>
           {COLLECTIONS.map((c) =>
-            <Tile key={c.id} c={c} count={counts[c.id] || 0} style={tileStyle} onOpen={onOpen} />
+            <Tile key={c.id} c={c} count={counts[c.id] || 0} style={tileStyle} onOpen={onOpen} coverUrl={coverByCol[c.id]} />
           )}
         </div>
         <div className="cz-drive-row">
