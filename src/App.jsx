@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Icon } from './icons.jsx';
 import { COLLECTIONS, COL, SEED_ITEMS, nid } from './data.js';
 import { HomeScreen } from './screens/HomeScreen.jsx';
 import { BrowseScreen } from './screens/BrowseScreen.jsx';
 import { CaptureScreen, DetailScreen } from './screens/CaptureScreen.jsx';
+import { isAuthenticated, requestToken, revokeToken } from './auth.js';
+import { saveCatalogToDrive, loadCatalogFromDrive, saveImageToDrive, resetDriveCache } from './drive.js';
 
 const DEVICES = {
   mobile:  { w: 390,  h: 844,  r: 44 },
@@ -47,7 +49,10 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [focusSignal, setFocusSignal] = useState(0);
   const [vp, setVp] = useState({ w: window.innerWidth, h: window.innerHeight });
+  const [driveAuthed, setDriveAuthed] = useState(false);
+  const [driveSyncing, setDriveSyncing] = useState(false);
   const toastTimer = useRef(null);
+  const driveSaveTimer = useRef(null);
 
   useEffect(() => {
     const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
@@ -55,11 +60,25 @@ export default function App() {
     return () => window.removeEventListener('resize', on);
   }, []);
 
+  // localStorage fallback — always keep in sync
   useEffect(() => {
     try {
       localStorage.setItem('catlize_items', JSON.stringify(items));
     } catch {}
   }, [items]);
+
+  // Drive debounced sync on items change
+  useEffect(() => {
+    if (!driveAuthed) return;
+    clearTimeout(driveSaveTimer.current);
+    driveSaveTimer.current = setTimeout(async () => {
+      try {
+        await saveCatalogToDrive(items);
+      } catch (e) {
+        console.warn('[Drive] sync failed:', e);
+      }
+    }, 1500);
+  }, [items, driveAuthed]);
 
   const counts = useMemo(() => {
     const c = {};
@@ -73,6 +92,37 @@ export default function App() {
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 2400);
   };
+
+  const connectDrive = useCallback(async () => {
+    try {
+      setDriveSyncing(true);
+      await requestToken();
+      setDriveAuthed(true);
+      // Load catalog from Drive
+      const remote = await loadCatalogFromDrive();
+      if (remote && Array.isArray(remote) && remote.length > 0) {
+        setItems(remote);
+        localStorage.setItem('catlize_items', JSON.stringify(remote));
+        showToast('Catalogo caricato da Google Drive');
+      } else {
+        // Push local to Drive if Drive is empty
+        await saveCatalogToDrive(items);
+        showToast('Google Drive collegato');
+      }
+    } catch (e) {
+      console.error('[Drive] connect failed:', e);
+      showToast('Errore connessione Drive');
+    } finally {
+      setDriveSyncing(false);
+    }
+  }, [items]);
+
+  const disconnectDrive = useCallback(() => {
+    revokeToken();
+    resetDriveCache();
+    setDriveAuthed(false);
+    showToast('Google Drive scollegato');
+  }, []);
 
   const goHome = () => { setOverlay(null); setBase('home'); };
   const openCollection = (id) => { setActiveCol(id); setBrowseAll(false); setBase('browse'); setQuery(''); setOverlay(null); };
@@ -100,13 +150,17 @@ export default function App() {
     });
   };
 
-  const saveNew = () => {
+  const saveNew = async () => {
     const item = { ...editing.item }; delete item._new;
     setItems((p) => [...p, item]);
     setActiveCol(item.collection);
     setBase('browse');
     setOverlay(null);
     showToast(`Salvato in ${COL[item.collection].name}`);
+    // Upload cover image to Drive if available
+    if (driveAuthed && item._capturedImage) {
+      saveImageToDrive(item.id, item._capturedImage).catch((e) => console.warn('[Drive] img upload failed:', e));
+    }
   };
 
   const closeDetail = () => {
@@ -177,7 +231,9 @@ export default function App() {
 
           <div className="cz-mainwrap">
             {base === 'home' ? (
-              <HomeScreen counts={counts} tileStyle="cover" onOpen={openCollection} dark={dark} onToggleTheme={toggleDark} />
+              <HomeScreen counts={counts} tileStyle="cover" onOpen={openCollection} dark={dark} onToggleTheme={toggleDark}
+                driveAuthed={driveAuthed} driveSyncing={driveSyncing}
+                onConnectDrive={connectDrive} onDisconnectDrive={disconnectDrive} />
             ) : (
               <BrowseScreen collection={collection} items={items} view={view} setView={setView}
                 query={query} setQuery={setQuery} sort={sort} setSort={setSort}

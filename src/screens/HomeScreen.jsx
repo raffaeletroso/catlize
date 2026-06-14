@@ -44,7 +44,7 @@ function Tile({ c, count, style, onOpen }) {
   );
 }
 
-export function HomeScreen({ counts, tileStyle, onOpen, dark, onToggleTheme }) {
+export function HomeScreen({ counts, tileStyle, onOpen, dark, onToggleTheme, driveAuthed, driveSyncing, onConnectDrive, onDisconnectDrive }) {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   return (
     <div className="cz-main">
@@ -70,7 +70,33 @@ export function HomeScreen({ counts, tileStyle, onOpen, dark, onToggleTheme }) {
             <Tile key={c.id} c={c} count={counts[c.id] || 0} style={tileStyle} onOpen={onOpen} />
           )}
         </div>
+        <div className="cz-drive-row">
+          {driveAuthed ? (
+            <button className="cz-drive-btn cz-drive-btn--connected" onClick={onDisconnectDrive} disabled={driveSyncing}>
+              <DriveIcon />
+              <span>Google Drive collegato</span>
+            </button>
+          ) : (
+            <button className="cz-drive-btn" onClick={onConnectDrive} disabled={driveSyncing}>
+              <DriveIcon />
+              <span>{driveSyncing ? 'Connessione…' : 'Collega Google Drive'}</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+function DriveIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0a7.9 7.9 0 003.3 6.65z" fill="#0066da"/>
+      <path d="M43.65 25L29.9 1.2C28.55 2 27.4 3.1 26.6 4.5L.5 50.3A7.9 7.9 0 000 53.7h27.5z" fill="#00ac47"/>
+      <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25A7.9 7.9 0 0087.3 54H59.75l5.9 12.2z" fill="#ea4335"/>
+      <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+      <path d="M59.75 54H87.3a7.9 7.9 0 00-.5-3.3L60.65 4.5C59.85 3.1 58.7 2 57.4 1.2L43.65 25z" fill="#2684fc"/>
+      <path d="M27.5 54L13.75 77.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2L59.75 54z" fill="#ffba00"/>
+    </svg>
   );
 }
