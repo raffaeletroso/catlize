@@ -4,6 +4,7 @@ import { Icon } from '../icons.jsx';
 import { Thumb } from '../ui.jsx';
 import { COLLECTIONS, COL, FIELD_SCHEMA, IMAGE_SLOTS } from '../data.js';
 import { lookupBarcode, searchText } from '../discogs.js';
+import { searchComicVine } from '../comicvine.js';
 
 // ─── useCamera ───────────────────────────────────────────────────────────────
 function useCamera() {
@@ -212,13 +213,113 @@ function SearchPanel({ onSelect, onSkip }) {
   );
 }
 
+// ─── ComicVineSearchPanel ────────────────────────────────────────────────────
+function ComicVineSearchPanel({ onSelect, onSkip }) {
+  const [testata, setTestata] = useState('');
+  const [numero,  setNumero]  = useState('');
+  const [state,   setState]   = useState('idle');
+  const [results, setResults] = useState([]);
+
+  const canSearch = testata.trim() || numero.trim();
+
+  const doSearch = async (e) => {
+    e.preventDefault();
+    if (!canSearch) return;
+    setState('searching');
+    try {
+      const res = await searchComicVine({ testata: testata.trim(), numero: numero.trim() });
+      setResults(res);
+      setState('results');
+    } catch (err) {
+      console.error('[ComicVine search]', err);
+      setState('error');
+    }
+  };
+
+  return (
+    <div className="cz-search-panel">
+      <form className="cz-search-form" onSubmit={doSearch}>
+        <input
+          className="cz-search-input"
+          value={testata}
+          onChange={e => setTestata(e.target.value)}
+          placeholder="Testata (es. Dylan Dog)"
+          autoComplete="off"
+          disabled={state === 'searching'}
+        />
+        <input
+          className="cz-search-input"
+          value={numero}
+          onChange={e => setNumero(e.target.value)}
+          placeholder="Numero (opzionale)"
+          autoComplete="off"
+          disabled={state === 'searching'}
+        />
+        <button
+          type="submit"
+          className="cz-btn cz-btn-primary"
+          disabled={!canSearch || state === 'searching'}
+          style={{ width: '100%' }}
+        >
+          {state === 'searching'
+            ? <><span className="cz-spinner cz-spinner-sm" /> Ricerca…</>
+            : <><Icon name="search" size={17} stroke={2.2} /> Cerca su Comic Vine</>}
+        </button>
+      </form>
+
+      {state === 'error' && (
+        <p className="cz-search-msg">Errore di rete — riprova.</p>
+      )}
+
+      {state === 'results' && results.length === 0 && (
+        <div className="cz-search-empty">
+          <p>Nessun risultato trovato.</p>
+          <button className="cz-btn cz-btn-ghost" style={{ width: '100%' }} onClick={onSkip}>
+            Compila manualmente
+          </button>
+        </div>
+      )}
+
+      {state === 'results' && results.length > 0 && (
+        <ul className="cz-result-list">
+          {results.map((r, i) => (
+            <li key={i}>
+              <button className="cz-result-item" onClick={() => onSelect(r)}>
+                {r._coverUrl
+                  ? <img src={r._coverUrl} className="cz-result-thumb" alt="" />
+                  : <div className="cz-result-thumb cz-result-thumb--ph"><Icon name="book" size={20} stroke={1.8} /></div>
+                }
+                <div className="cz-result-body">
+                  <div className="cz-result-title">
+                    {r.testata}{r.numero ? ` n. ${r.numero}` : ''}
+                  </div>
+                  <div className="cz-result-meta">
+                    {[r.editore, r.anno].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+                <Icon name="chevR" size={18} style={{ color: 'rgba(255,255,255,.4)', flexShrink: 0 }} />
+              </button>
+            </li>
+          ))}
+          <li>
+            <button className="cz-result-skip" onClick={onSkip}>
+              Nessuno di questi — compila manualmente
+            </button>
+          </li>
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ─── CaptureScreen ───────────────────────────────────────────────────────────
 export function CaptureScreen({ capCol, setCapCol, onShutter, onClose }) {
-  const c       = capCol ? COL[capCol] : null;
-  const isDischi = capCol === 'dischi';
-  const slots   = capCol ? IMAGE_SLOTS[capCol] : [];
+  const c        = capCol ? COL[capCol] : null;
+  const isDischi  = capCol === 'dischi';
+  const isFumetti = capCol === 'fumetti';
+  const slots    = capCol ? IMAGE_SLOTS[capCol] : [];
 
-  // 'barcode' | 'search' — solo per collezione dischi
+  // 'barcode' | 'search' | 'photo'
   const [scanMode, setScanMode] = useState('barcode');
   const barcode = isDischi ? scanMode === 'barcode' : c?.capture !== 'barcode';
 
@@ -235,16 +336,16 @@ export function CaptureScreen({ capCol, setCapCol, onShutter, onClose }) {
   useEffect(() => {
     if (!capCol) return;
     startedRef.current = false;
-  }, [capCol]);
+    setScanMode(isFumetti ? 'search' : 'barcode');
+  }, [capCol]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!capCol) return;
     if (startedRef.current) return;
-    // In search mode, no camera needed
-    if (isDischi && scanMode === 'search') return;
+    if (scanMode === 'search' && (isDischi || isFumetti)) return;
     startedRef.current = true;
     start('environment');
-  }, [capCol, scanMode, isDischi, start]);
+  }, [capCol, scanMode, isDischi, isFumetti, start]);
 
   useEffect(() => {
     setLookupState('idle');
@@ -287,7 +388,8 @@ export function CaptureScreen({ capCol, setCapCol, onShutter, onClose }) {
   const isCaptured  = camState === 'captured';
   const isDenied    = camState === 'denied' || camState === 'unsupported';
   const isSearching = lookupState === 'searching';
-  const showCamera  = !(isDischi && scanMode === 'search');
+  const inSearchMode = scanMode === 'search' && (isDischi || isFumetti);
+  const showCamera  = !inSearchMode;
 
   return (
     <div className="cz-capture">
@@ -298,19 +400,20 @@ export function CaptureScreen({ capCol, setCapCol, onShutter, onClose }) {
           <button className="cz-cap-x" onClick={onClose} title="Chiudi"><Icon name="x" size={20} /></button>
           {isDischi ? (
             <div className="cz-scan-tabs">
-              <button
-                className="cz-scan-tab"
-                data-active={scanMode === 'barcode'}
-                onClick={() => switchMode('barcode')}
-              >
+              <button className="cz-scan-tab" data-active={scanMode === 'barcode'} onClick={() => switchMode('barcode')}>
                 <Icon name="scan" size={14} stroke={2.1} /> Barcode
               </button>
-              <button
-                className="cz-scan-tab"
-                data-active={scanMode === 'search'}
-                onClick={() => switchMode('search')}
-              >
+              <button className="cz-scan-tab" data-active={scanMode === 'search'} onClick={() => switchMode('search')}>
                 <Icon name="search" size={14} stroke={2.1} /> Cerca
+              </button>
+            </div>
+          ) : isFumetti ? (
+            <div className="cz-scan-tabs">
+              <button className="cz-scan-tab" data-active={scanMode === 'search'} onClick={() => switchMode('search')}>
+                <Icon name="search" size={14} stroke={2.1} /> Cerca
+              </button>
+              <button className="cz-scan-tab" data-active={scanMode === 'photo'} onClick={() => switchMode('photo')}>
+                <Icon name="camera" size={14} stroke={2.1} /> Foto
               </button>
             </div>
           ) : (
@@ -331,13 +434,13 @@ export function CaptureScreen({ capCol, setCapCol, onShutter, onClose }) {
         {!showCamera && null}
       </div>
 
-      {/* ── Search panel (solo dischi + search mode) ── */}
-      {isDischi && scanMode === 'search' ? (
+      {/* ── Search panel (dischi o fumetti in search mode) ── */}
+      {inSearchMode ? (
         <div className="cz-viewfinder cz-viewfinder--search">
-          <SearchPanel
-            onSelect={(result) => onShutter(result)}
-            onSkip={() => onShutter({ _noResults: true })}
-          />
+          {isDischi
+            ? <SearchPanel onSelect={(result) => onShutter(result)} onSkip={() => onShutter({ _noResults: true })} />
+            : <ComicVineSearchPanel onSelect={(result) => onShutter(result)} onSkip={() => onShutter({ _noResults: true })} />
+          }
         </div>
       ) : (
         <>
@@ -535,7 +638,8 @@ export function DetailScreen({ item, mode, onChange, onSave, onClose, onDelete }
           <span className="cz-saved-chip"><Icon name="check" size={14} stroke={2.6} /> Salvato</span>
         ) : (
           <span className="cz-saved-chip" style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}>
-            <Icon name="sparkle" size={13} stroke={2.2} /> {item.artista ? 'Trovato su Discogs' : 'Nuovo'}
+            <Icon name="sparkle" size={13} stroke={2.2} />
+            {item.testata ? 'Trovato su Comic Vine' : item.artista ? 'Trovato su Discogs' : 'Nuovo'}
           </span>
         )}
       </div>
