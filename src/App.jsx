@@ -70,8 +70,13 @@ export default function App() {
         setDriveAuthed(true);
         loadCatalogFromDrive().then((remote) => {
           if (cancelled || !remote || !Array.isArray(remote) || !remote.length) return;
-          setItems(remote);
-          try { localStorage.setItem('catlize_items', JSON.stringify(remote)); } catch {}
+          // Preserve _coverUrl from local items if Drive version lacks it
+          let local = [];
+          try { local = JSON.parse(localStorage.getItem('catlize_items') || '[]'); } catch {}
+          const localCover = Object.fromEntries(local.filter(it => it._coverUrl).map(it => [it.id, it._coverUrl]));
+          const merged = remote.map(it => localCover[it.id] && !it._coverUrl ? { ...it, _coverUrl: localCover[it.id] } : it);
+          setItems(merged);
+          try { localStorage.setItem('catlize_items', JSON.stringify(merged)); } catch {}
         }).catch(() => {});
       });
     }
@@ -257,7 +262,7 @@ export default function App() {
 
           <div className="cz-mainwrap">
             {base === 'home' ? (
-              <HomeScreen counts={counts} tileStyle="cover" onOpen={openCollection} dark={dark} onToggleTheme={toggleDark}
+              <HomeScreen counts={counts} items={items} tileStyle="cover" onOpen={openCollection} dark={dark} onToggleTheme={toggleDark}
                 driveAuthed={driveAuthed} driveSyncing={driveSyncing}
                 onConnectDrive={connectDrive} onDisconnectDrive={disconnectDrive} />
             ) : (

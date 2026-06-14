@@ -56,7 +56,6 @@ export function HomeScreen({ counts, items = [], tileStyle, onOpen, dark, onTogg
       .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }))[0]?._coverUrl || null;
     coverByCol[c.id] = cover;
   }
-  console.log('[HomeScreen] items:', items.length, 'coverByCol:', coverByCol);
   return (
     <div className="cz-main">
       <div className="cz-topbar">
