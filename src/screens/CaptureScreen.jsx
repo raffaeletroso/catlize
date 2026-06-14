@@ -3,17 +3,17 @@ import { BrowserMultiFormatReader } from '@zxing/browser';
 import { Icon } from '../icons.jsx';
 import { Thumb } from '../ui.jsx';
 import { COLLECTIONS, COL, FIELD_SCHEMA, IMAGE_SLOTS } from '../data.js';
-import { lookupBarcode } from '../discogs.js';
+import { lookupBarcode, searchText } from '../discogs.js';
 
 // ─── useCamera ───────────────────────────────────────────────────────────────
 function useCamera() {
-  const videoRef    = useRef(null);
-  const streamRef   = useRef(null);
-  const captureCanvasRef = useRef(null); // for shutter capture
-  const scanCanvasRef    = useRef(null); // for ZXing frame reads (hidden)
-  const [camState, setCamState]     = useState('idle');
+  const videoRef         = useRef(null);
+  const streamRef        = useRef(null);
+  const captureCanvasRef = useRef(null);
+  const scanCanvasRef    = useRef(null);
+  const [camState, setCamState]       = useState('idle');
   const [capturedImg, setCapturedImg] = useState(null);
-  const [facingMode, setFacingMode] = useState('environment');
+  const [facingMode, setFacingMode]   = useState('environment');
 
   const stop = useCallback(() => {
     if (streamRef.current) {
@@ -34,7 +34,7 @@ function useCamera() {
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       setCamState('live');
-    } catch (err) {
+    } catch {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         streamRef.current = stream;
@@ -77,8 +77,6 @@ function useCamera() {
 }
 
 // ─── useBarcodeScanner ───────────────────────────────────────────────────────
-// RAF loop: draws each video frame to a hidden canvas, runs ZXing decode.
-// Calls onDetected(code) once when a barcode is found, then stops.
 function useBarcodeScanner({ videoRef, scanCanvasRef, active, onDetected }) {
   const readerRef   = useRef(null);
   const rafRef      = useRef(null);
@@ -90,7 +88,6 @@ function useBarcodeScanner({ videoRef, scanCanvasRef, active, onDetected }) {
       detectedRef.current = false;
       return;
     }
-
     if (!readerRef.current) readerRef.current = new BrowserMultiFormatReader();
     detectedRef.current = false;
 
@@ -110,93 +107,187 @@ function useBarcodeScanner({ videoRef, scanCanvasRef, active, onDetected }) {
         detectedRef.current = true;
         onDetected(result.getText());
       } catch {
-        // NotFoundException — no barcode in this frame, try next
         rafRef.current = requestAnimationFrame(tick);
       }
     };
-
     rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      detectedRef.current = false;
-    };
+    return () => { cancelAnimationFrame(rafRef.current); detectedRef.current = false; };
   }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+// ─── SearchPanel ─────────────────────────────────────────────────────────────
+function SearchPanel({ onSelect, onSkip }) {
+  const [artista, setArtista] = useState('');
+  const [titolo,  setTitolo]  = useState('');
+  const [state,   setState]   = useState('idle'); // idle | searching | results | error
+  const [results, setResults] = useState([]);
+
+  const canSearch = artista.trim() || titolo.trim();
+
+  const doSearch = async (e) => {
+    e.preventDefault();
+    if (!canSearch) return;
+    setState('searching');
+    try {
+      const res = await searchText({ artista: artista.trim(), titolo: titolo.trim() });
+      setResults(res);
+      setState('results');
+    } catch (err) {
+      console.error('[Discogs search]', err);
+      setState('error');
+    }
+  };
+
+  return (
+    <div className="cz-search-panel">
+      <form className="cz-search-form" onSubmit={doSearch}>
+        <input
+          className="cz-search-input"
+          value={artista}
+          onChange={e => setArtista(e.target.value)}
+          placeholder="Artista"
+          autoComplete="off"
+          disabled={state === 'searching'}
+        />
+        <input
+          className="cz-search-input"
+          value={titolo}
+          onChange={e => setTitolo(e.target.value)}
+          placeholder="Titolo"
+          autoComplete="off"
+          disabled={state === 'searching'}
+        />
+        <button
+          type="submit"
+          className="cz-btn cz-btn-primary"
+          disabled={!canSearch || state === 'searching'}
+          style={{ width: '100%' }}
+        >
+          {state === 'searching'
+            ? <><span className="cz-spinner cz-spinner-sm" /> Ricerca…</>
+            : <><Icon name="search" size={17} stroke={2.2} /> Cerca su Discogs</>}
+        </button>
+      </form>
+
+      {state === 'error' && (
+        <p className="cz-search-msg">Errore di rete — riprova.</p>
+      )}
+
+      {state === 'results' && results.length === 0 && (
+        <div className="cz-search-empty">
+          <p>Nessun risultato trovato.</p>
+          <button className="cz-btn cz-btn-ghost" style={{ width: '100%' }} onClick={onSkip}>
+            Compila manualmente
+          </button>
+        </div>
+      )}
+
+      {state === 'results' && results.length > 0 && (
+        <ul className="cz-result-list">
+          {results.map((r, i) => (
+            <li key={i}>
+              <button className="cz-result-item" onClick={() => onSelect(r)}>
+                {r._coverUrl
+                  ? <img src={r._coverUrl} className="cz-result-thumb" alt="" />
+                  : <div className="cz-result-thumb cz-result-thumb--ph"><Icon name="disc" size={20} stroke={1.8} /></div>
+                }
+                <div className="cz-result-body">
+                  <div className="cz-result-title">{r.artista ? `${r.artista} — ${r.titolo}` : r.titolo}</div>
+                  <div className="cz-result-meta">
+                    {[r.anno, r.etichetta, r.formato].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+                <Icon name="chevR" size={18} style={{ color: 'rgba(255,255,255,.4)', flexShrink: 0 }} />
+              </button>
+            </li>
+          ))}
+          <li>
+            <button className="cz-result-skip" onClick={onSkip}>
+              Nessuno di questi — compila manualmente
+            </button>
+          </li>
+        </ul>
+      )}
+    </div>
+  );
 }
 
 // ─── CaptureScreen ───────────────────────────────────────────────────────────
 export function CaptureScreen({ capCol, setCapCol, onShutter, onClose }) {
   const c       = capCol ? COL[capCol] : null;
-  const barcode = c?.capture === 'barcode';
+  const isDischi = capCol === 'dischi';
   const slots   = capCol ? IMAGE_SLOTS[capCol] : [];
+
+  // 'barcode' | 'search' — solo per collezione dischi
+  const [scanMode, setScanMode] = useState('barcode');
+  const barcode = isDischi ? scanMode === 'barcode' : c?.capture !== 'barcode';
 
   const {
     videoRef, captureCanvasRef, scanCanvasRef,
-    camState, setCamState, capturedImg, setCapturedImg,
+    camState, capturedImg, setCapturedImg,
     start, capture, retake, flipCamera,
   } = useCamera();
 
-  // 'idle' | 'searching' | 'found' | 'notfound' | 'error'
   const [lookupState, setLookupState] = useState('idle');
   const [lookupMsg,   setLookupMsg]   = useState('');
 
-  // Start camera when a collection is first selected
   const startedRef = useRef(false);
   useEffect(() => {
     if (!capCol) return;
+    startedRef.current = false;
+  }, [capCol]);
+
+  useEffect(() => {
+    if (!capCol) return;
     if (startedRef.current) return;
+    // In search mode, no camera needed
+    if (isDischi && scanMode === 'search') return;
     startedRef.current = true;
     start('environment');
-  }, [capCol, start]);
+  }, [capCol, scanMode, isDischi, start]);
 
-  // Reset lookup state when collection changes
   useEffect(() => {
     setLookupState('idle');
     setLookupMsg('');
-  }, [capCol]);
+  }, [capCol, scanMode]);
 
-  // ── Barcode detected callback ─────────────────────────────────────────────
+  // ── Switch scan mode (barcode <-> search) ────────────────────────────────
+  const switchMode = (mode) => {
+    setScanMode(mode);
+    startedRef.current = false;
+    setCapturedImg(null);
+  };
+
+  // ── Barcode detected ─────────────────────────────────────────────────────
   const handleBarcode = useCallback(async (code) => {
-    // Freeze the camera and show searching state
     setLookupState('searching');
     setLookupMsg(`Codice: ${code}`);
-
-    // Capture a still frame of the vinyl/barcode
     const photo = capture();
-
     try {
       const data = await lookupBarcode(code);
-      if (data) {
-        onShutter({ ...data, _photo: photo || undefined });
-      } else {
-        onShutter({ _photo: photo || undefined, _noResults: true });
-      }
+      onShutter(data ? { ...data, _photo: photo || undefined } : { _photo: photo || undefined, _noResults: true });
     } catch (err) {
       console.error('Discogs lookup failed:', err);
       onShutter({ _photo: photo || undefined, _noResults: true });
     }
   }, [capture, onShutter]);
 
-  // ── Barcode scanner (only when live + barcode mode) ───────────────────────
   useBarcodeScanner({
     videoRef,
     scanCanvasRef,
-    active: barcode && camState === 'live',
+    active: isDischi && scanMode === 'barcode' && camState === 'live',
     onDetected: handleBarcode,
   });
 
-  // ── Manual shutter (photo mode) ───────────────────────────────────────────
-  const handleShutter = () => {
-    if (camState === 'live') capture();
-  };
+  // ── Manual shutter (photo mode) ──────────────────────────────────────────
+  const handleShutter = () => { if (camState === 'live') capture(); };
+  const handleConfirm = () => { onShutter({ _photo: capturedImg || undefined }); };
 
-  const handleConfirm = () => {
-    onShutter({ _photo: capturedImg || undefined });
-  };
-
-  const isLive     = camState === 'live';
-  const isCaptured = camState === 'captured';
-  const isDenied   = camState === 'denied' || camState === 'unsupported';
+  const isLive      = camState === 'live';
+  const isCaptured  = camState === 'captured';
+  const isDenied    = camState === 'denied' || camState === 'unsupported';
   const isSearching = lookupState === 'searching';
+  const showCamera  = !(isDischi && scanMode === 'search');
 
   return (
     <div className="cz-capture">
@@ -204,142 +295,166 @@ export function CaptureScreen({ capCol, setCapCol, onShutter, onClose }) {
       <div className="cz-cap-top">
         <div className="cz-cap-toprow">
           <button className="cz-cap-x" onClick={onClose} title="Chiudi"><Icon name="x" size={20} /></button>
-          <div className="cz-cap-mode">
-            <Icon name={barcode ? 'scan' : 'camera'} size={16} stroke={2.1} />
-            {barcode ? 'Scansione barcode' : 'Foto oggetto'}
-          </div>
-        </div>
-        <div className="cz-chiprow">
-          {COLLECTIONS.map((col) =>
-            <button key={col.id} className="cz-chip" data-on={col.id === capCol} onClick={() => setCapCol(col.id)}>
-              <Icon name={col.icon} size={15} stroke={2.1} />
-              {col.short}
-            </button>
+          {isDischi ? (
+            <div className="cz-scan-tabs">
+              <button
+                className="cz-scan-tab"
+                data-active={scanMode === 'barcode'}
+                onClick={() => switchMode('barcode')}
+              >
+                <Icon name="scan" size={14} stroke={2.1} /> Barcode
+              </button>
+              <button
+                className="cz-scan-tab"
+                data-active={scanMode === 'search'}
+                onClick={() => switchMode('search')}
+              >
+                <Icon name="search" size={14} stroke={2.1} /> Cerca
+              </button>
+            </div>
+          ) : (
+            <div className="cz-cap-mode">
+              <Icon name="camera" size={16} stroke={2.1} /> Foto oggetto
+            </div>
           )}
         </div>
+        {showCamera && (
+          <div className="cz-chiprow">
+            {COLLECTIONS.map((col) =>
+              <button key={col.id} className="cz-chip" data-on={col.id === capCol} onClick={() => setCapCol(col.id)}>
+                <Icon name={col.icon} size={15} stroke={2.1} /> {col.short}
+              </button>
+            )}
+          </div>
+        )}
+        {!showCamera && (
+          <div className="cz-chiprow" style={{ justifyContent: 'center', paddingTop: 4 }}>
+            <span style={{ color: 'rgba(255,255,255,.6)', fontSize: 13 }}>Discogs — ricerca testuale</span>
+          </div>
+        )}
       </div>
 
-      {/* ── Viewfinder ── */}
-      <div className="cz-viewfinder">
-        {/* Live video */}
-        <video
-          ref={videoRef}
-          className="cz-vf-video"
-          autoPlay playsInline muted
-          style={{ display: isLive || isSearching ? 'block' : 'none' }}
-        />
+      {/* ── Search panel (solo dischi + search mode) ── */}
+      {isDischi && scanMode === 'search' ? (
+        <div className="cz-viewfinder cz-viewfinder--search">
+          <SearchPanel
+            onSelect={(result) => onShutter(result)}
+            onSkip={() => onShutter({ _noResults: true })}
+          />
+        </div>
+      ) : (
+        <>
+          {/* ── Viewfinder ── */}
+          <div className="cz-viewfinder">
+            <video
+              ref={videoRef}
+              className="cz-vf-video"
+              autoPlay playsInline muted
+              style={{ display: isLive || isSearching ? 'block' : 'none' }}
+            />
 
-        {/* Captured frame preview (photo mode) */}
-        {isCaptured && capturedImg && (
-          <img src={capturedImg} className="cz-vf-video" alt="Foto scattata" />
-        )}
+            {isCaptured && capturedImg && (
+              <img src={capturedImg} className="cz-vf-video" alt="Foto scattata" />
+            )}
 
-        {/* No collection selected */}
-        {!capCol && (
-          <div className="cz-cap-nocol">Seleziona una raccolta per iniziare</div>
-        )}
+            {!capCol && (
+              <div className="cz-cap-nocol">Seleziona una raccolta per iniziare</div>
+            )}
 
-        {/* Camera loading */}
-        {capCol && camState === 'loading' && (
-          <div className="cz-cam-status">
-            <div className="cz-spinner" style={{ borderTopColor: '#fff' }} />
-            <span>Avvio fotocamera…</span>
+            {capCol && camState === 'loading' && (
+              <div className="cz-cam-status">
+                <div className="cz-spinner" style={{ borderTopColor: '#fff' }} />
+                <span>Avvio fotocamera…</span>
+              </div>
+            )}
+
+            {capCol && isDenied && (
+              <div className="cz-cam-denied">
+                <div className="cz-cam-denied-ico"><Icon name="camera" size={30} stroke={1.8} /></div>
+                <p className="cz-cam-denied-title">Fotocamera non accessibile</p>
+                <p className="cz-cam-denied-sub">
+                  {camState === 'unsupported'
+                    ? 'Il tuo browser non supporta l\'accesso alla fotocamera.'
+                    : 'Hai negato l\'accesso alla fotocamera. Vai nelle impostazioni del browser, consenti la fotocamera per questo sito, poi ricarica la pagina.'}
+                </p>
+              </div>
+            )}
+
+            {isSearching && (
+              <div className="cz-recog">
+                <div className="cz-spinner" />
+                <div style={{ textAlign: 'center' }}>
+                  <div className="cz-recog-txt">Ricerca su Discogs…</div>
+                  <div className="cz-recog-sub">{lookupMsg}</div>
+                </div>
+              </div>
+            )}
+
+            {capCol && isLive && isDischi && scanMode === 'barcode' && (
+              <div className="cz-reticle cz-reticle-overlay">
+                <span className="cz-corner tl" /><span className="cz-corner tr" />
+                <span className="cz-corner bl" /><span className="cz-corner br" />
+                <div className="cz-scanline" />
+              </div>
+            )}
+
+            {capCol && isLive && !isDischi && (
+              <div className="cz-objframe cz-objframe-overlay">
+                <span className="cz-corner tl" /><span className="cz-corner tr" />
+                <span className="cz-corner bl" /><span className="cz-corner br" />
+              </div>
+            )}
+
+            {capCol && isLive && (
+              <div className="cz-vf-hint">
+                {isDischi && scanMode === 'barcode'
+                  ? 'Inquadra il codice a barre sul retro del disco — rilevamento automatico'
+                  : `Inquadra ${slots.length > 1 ? 'il fronte del' : "l'intero"} ${c?.singular} nel riquadro`}
+              </div>
+            )}
+
+            {isCaptured && (
+              <div className="cz-cap-confirm">
+                <button className="cz-btn cz-btn-ghost cz-cap-confirm-btn" onClick={retake}>
+                  <Icon name="flip" size={18} stroke={2.1} /> Rifai
+                </button>
+                <button className="cz-btn cz-btn-primary cz-cap-confirm-btn" onClick={handleConfirm}>
+                  <Icon name="check" size={18} stroke={2.4} /> Usa foto
+                </button>
+              </div>
+            )}
           </div>
-        )}
 
-        {/* Permission denied */}
-        {capCol && isDenied && (
-          <div className="cz-cam-denied">
-            <div className="cz-cam-denied-ico"><Icon name="camera" size={30} stroke={1.8} /></div>
-            <p className="cz-cam-denied-title">Fotocamera non accessibile</p>
-            <p className="cz-cam-denied-sub">
-              {camState === 'unsupported'
-                ? 'Il tuo browser non supporta l\'accesso alla fotocamera.'
-                : 'Hai negato l\'accesso alla fotocamera. Vai nelle impostazioni del browser, consenti la fotocamera per questo sito, poi ricarica la pagina.'}
-            </p>
-          </div>
-        )}
+          <canvas ref={captureCanvasRef} style={{ display: 'none' }} />
+          <canvas ref={scanCanvasRef}    style={{ display: 'none' }} />
 
-        {/* Discogs searching overlay */}
-        {isSearching && (
-          <div className="cz-recog">
-            <div className="cz-spinner" />
-            <div style={{ textAlign: 'center' }}>
-              <div className="cz-recog-txt">Ricerca su Discogs…</div>
-              <div className="cz-recog-sub">{lookupMsg}</div>
-            </div>
-          </div>
-        )}
-
-        {/* Barcode reticle overlay */}
-        {capCol && isLive && barcode && (
-          <div className="cz-reticle cz-reticle-overlay">
-            <span className="cz-corner tl" /><span className="cz-corner tr" />
-            <span className="cz-corner bl" /><span className="cz-corner br" />
-            <div className="cz-scanline" />
-          </div>
-        )}
-
-        {/* Photo mode frame */}
-        {capCol && isLive && !barcode && (
-          <div className="cz-objframe cz-objframe-overlay">
-            <span className="cz-corner tl" /><span className="cz-corner tr" />
-            <span className="cz-corner bl" /><span className="cz-corner br" />
-          </div>
-        )}
-
-        {/* Hint */}
-        {capCol && isLive && (
-          <div className="cz-vf-hint">
-            {barcode
-              ? 'Inquadra il codice a barre sul retro del disco — rilevamento automatico'
-              : `Inquadra ${slots.length > 1 ? 'il fronte del' : "l'intero"} ${c?.singular} nel riquadro`}
-          </div>
-        )}
-
-        {/* Confirm / retake (photo mode only) */}
-        {isCaptured && (
-          <div className="cz-cap-confirm">
-            <button className="cz-btn cz-btn-ghost cz-cap-confirm-btn" onClick={retake}>
-              <Icon name="flip" size={18} stroke={2.1} /> Rifai
+          {/* ── Shutter bar ── */}
+          <div className="cz-cap-bottom">
+            <button className="cz-cap-side" style={{ opacity: 0.4, cursor: 'default' }}>
+              <Icon name="image" size={22} stroke={2.1} />
             </button>
-            <button className="cz-btn cz-btn-primary cz-cap-confirm-btn" onClick={handleConfirm}>
-              <Icon name="check" size={18} stroke={2.4} /> Usa foto
+            {isDischi && scanMode === 'barcode' ? (
+              <div className="cz-shutter cz-shutter-auto" aria-label="Rilevamento automatico">
+                <Icon name="scan" size={26} stroke={1.8} style={{ color: 'rgba(255,255,255,.5)' }} />
+              </div>
+            ) : (
+              <button
+                className="cz-shutter"
+                onClick={handleShutter}
+                disabled={!isLive}
+                style={{ display: isCaptured ? 'none' : 'grid' }}
+                aria-label="Scatta"
+              >
+                <span />
+              </button>
+            )}
+            {isCaptured && <div style={{ width: 74, height: 74 }} />}
+            <button className="cz-cap-side" onClick={flipCamera} disabled={!isLive} title="Cambia fotocamera">
+              <Icon name="flip" size={22} stroke={2.1} />
             </button>
           </div>
-        )}
-      </div>
-
-      {/* Hidden canvases */}
-      <canvas ref={captureCanvasRef} style={{ display: 'none' }} />
-      <canvas ref={scanCanvasRef}    style={{ display: 'none' }} />
-
-      {/* ── Shutter bar (photo mode only — barcode scans automatically) ── */}
-      <div className="cz-cap-bottom">
-        <button className="cz-cap-side" style={{ opacity: 0.4, cursor: 'default' }}>
-          <Icon name="image" size={22} stroke={2.1} />
-        </button>
-        {barcode ? (
-          /* Barcode mode: pulsante scatto disabilitato, scanning è auto */
-          <div className="cz-shutter cz-shutter-auto" aria-label="Rilevamento automatico">
-            <Icon name="scan" size={26} stroke={1.8} style={{ color: 'rgba(255,255,255,.5)' }} />
-          </div>
-        ) : (
-          <button
-            className="cz-shutter"
-            onClick={handleShutter}
-            disabled={!isLive}
-            style={{ display: isCaptured ? 'none' : 'grid' }}
-            aria-label="Scatta"
-          >
-            <span />
-          </button>
-        )}
-        {isCaptured && <div style={{ width: 74, height: 74 }} />}
-        <button className="cz-cap-side" onClick={flipCamera} disabled={!isLive} title="Cambia fotocamera">
-          <Icon name="flip" size={22} stroke={2.1} />
-        </button>
-      </div>
+        </>
+      )}
     </div>
   );
 }
@@ -429,7 +544,6 @@ export function DetailScreen({ item, mode, onChange, onSave, onClose, onDelete }
       </div>
 
       <div className="cz-detail-body">
-        {/* "no results" banner */}
         {item._noResults && (
           <div className="cz-no-results-banner">
             <Icon name="search" size={16} stroke={2} />
@@ -437,7 +551,6 @@ export function DetailScreen({ item, mode, onChange, onSave, onClose, onDelete }
           </div>
         )}
 
-        {/* cover image from Discogs or placeholder */}
         <div className="cz-imgrow">
           {slots.map((s) =>
             <div className="cz-imslot" key={s.key}>

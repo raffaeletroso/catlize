@@ -1,31 +1,34 @@
 const TOKEN = import.meta.env.VITE_DISCOGS_TOKEN;
 
-export async function lookupBarcode(barcode) {
-  console.log('[Discogs] barcode rilevato:', barcode);
-  console.log('[Discogs] token presente:', !!TOKEN);
-
+async function discogsSearch(params) {
   if (!TOKEN) throw new Error('VITE_DISCOGS_TOKEN non configurato');
-
-  const url = `https://api.discogs.com/database/search?barcode=${encodeURIComponent(barcode)}&token=${TOKEN}`;
-  console.log('[Discogs] URL chiamata:', url);
-
-  const res = await fetch(url);
-  console.log('[Discogs] HTTP status:', res.status);
-
+  const qs = new URLSearchParams({ ...params, token: TOKEN }).toString();
+  const res = await fetch(`https://api.discogs.com/database/search?${qs}`);
   if (!res.ok) throw new Error(`Discogs ${res.status}`);
-  const data = await res.json();
-  console.log('[Discogs] risultati:', data.results?.length ?? 0, data.results?.[0] ?? null);
+  return res.json();
+}
 
+export async function lookupBarcode(barcode) {
+  console.log('[Discogs] barcode:', barcode, 'token:', !!TOKEN);
+  const data = await discogsSearch({ barcode });
+  console.log('[Discogs] risultati barcode:', data.results?.length ?? 0);
   if (!data.results?.length) return null;
   return mapResult(data.results[0]);
 }
 
-function mapResult(r) {
+export async function searchText({ artista, titolo }) {
+  const params = { type: 'release' };
+  if (titolo)  params.release_title = titolo;
+  if (artista) params.artist        = artista;
+  const data = await discogsSearch(params);
+  return (data.results || []).slice(0, 5).map(mapResult);
+}
+
+export function mapResult(r) {
   const raw = r.title || '';
   const sep = raw.indexOf(' - ');
   const artista = sep !== -1 ? raw.slice(0, sep).trim() : '';
   const titolo  = sep !== -1 ? raw.slice(sep + 3).trim() : raw.trim();
-
   return {
     artista,
     titolo,
@@ -43,5 +46,5 @@ function mapFormato(formats) {
   if (f.includes('cassette'))                           return 'Musicassetta';
   if (f.some(s => s.includes('ep')))                   return 'EP';
   if (f.includes('single') || f.some(s => s === '7"')) return '45 giri';
-  return 'LP'; // default for vinyl
+  return 'LP';
 }
