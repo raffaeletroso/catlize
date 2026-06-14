@@ -167,6 +167,7 @@ export default function App() {
     history.pushState({ catlize: true }, '');
     const onPop = () => {
       const { overlay: o, base: b, editing: ed } = appStateRef.current;
+      console.log('[back]', { overlay: o, base: b });
       if (o === 'detail') {
         history.pushState({ catlize: true }, '');
         appStateRef.current = { ...appStateRef.current, overlay: null };
