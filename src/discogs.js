@@ -1,12 +1,21 @@
 const TOKEN = import.meta.env.VITE_DISCOGS_TOKEN;
 
 export async function lookupBarcode(barcode) {
+  console.log('[Discogs] barcode rilevato:', barcode);
+  console.log('[Discogs] token presente:', !!TOKEN);
+
   if (!TOKEN) throw new Error('VITE_DISCOGS_TOKEN non configurato');
-  const res = await fetch(
-    `https://api.discogs.com/database/search?barcode=${encodeURIComponent(barcode)}&token=${TOKEN}`
-  );
+
+  const url = `https://api.discogs.com/database/search?barcode=${encodeURIComponent(barcode)}&token=${TOKEN}`;
+  console.log('[Discogs] URL chiamata:', url);
+
+  const res = await fetch(url);
+  console.log('[Discogs] HTTP status:', res.status);
+
   if (!res.ok) throw new Error(`Discogs ${res.status}`);
   const data = await res.json();
+  console.log('[Discogs] risultati:', data.results?.length ?? 0, data.results?.[0] ?? null);
+
   if (!data.results?.length) return null;
   return mapResult(data.results[0]);
 }
