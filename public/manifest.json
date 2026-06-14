@@ -1,10 +1,11 @@
 {
+  "id": "/",
   "name": "catlize",
   "short_name": "catlize",
   "description": "Cataloga le tue collezioni",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fafafa",
+  "background_color": "#f4b400",
   "theme_color": "#f4b400",
   "orientation": "portrait-primary",
   "icons": [
