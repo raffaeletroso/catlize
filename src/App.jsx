@@ -85,10 +85,9 @@ export default function App() {
     setOverlay('capture');
   };
 
-  const shutter = (capturedImg) => {
-    const blank = { id: nid(), collection: capCol, _new: true };
-    if (capturedImg) blank._photo = capturedImg;
-    setEditing({ item: blank, mode: 'new', source: 'capture' });
+  const shutter = (prefilled = {}) => {
+    const item = { id: nid(), collection: capCol, _new: true, ...prefilled };
+    setEditing({ item, mode: 'new', source: 'capture' });
     setOverlay('detail');
   };
 

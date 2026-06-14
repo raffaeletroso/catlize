@@ -439,6 +439,10 @@ button{font-family:inherit}
 .cz-recog-txt{font-size:15.5px;font-weight:600}
 .cz-recog-sub{font-size:13px;color:rgba(255,255,255,.65);margin-top:-12px}
 
+/* barcode mode: shutter sostituito da icona scan statica */
+.cz-shutter-auto{width:74px;height:74px;border-radius:50%;border:5px solid rgba(255,255,255,.3);
+  background:transparent;display:grid;place-items:center}
+
 /* ---- Detail / edit ---- */
 .cz-detail{flex:1;background:var(--bg);color:var(--text);display:flex;flex-direction:column;
   position:relative;overflow:hidden}
@@ -472,6 +476,15 @@ button{font-family:inherit}
 .cz-field .cz-select{width:100%;border-color:var(--accent-line)}
 .cz-field-row{display:flex;gap:12px}
 .cz-field-row .cz-field{flex:1}
+
+/* no-results banner in detail */
+.cz-no-results-banner{display:flex;align-items:center;gap:9px;padding:11px 14px;
+  border-radius:10px;background:var(--surface-2);border:1px solid var(--border);
+  font-size:13.5px;font-weight:500;color:var(--text-muted)}
+
+/* cover da Discogs in detail */
+.cz-imslot-cover{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:12px;
+  border:1px solid var(--accent-line)}
 
 .cz-customfield{display:flex;gap:8px;align-items:flex-end}
 .cz-customfield .cz-field{flex:1}
