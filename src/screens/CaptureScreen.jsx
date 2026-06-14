@@ -87,7 +87,7 @@ function useCamera() {
 }
 
 // ─── CaptureScreen ──────────────────────────────────────────────────────────
-export function CaptureScreen({ capCol, setCapCol, status, onShutter, onClose, autoAdd, setAutoAdd }) {
+export function CaptureScreen({ capCol, setCapCol, onShutter, onClose }) {
   const c = capCol ? COL[capCol] : null;
   const barcode = c && c.capture === 'barcode';
   const slots = capCol ? IMAGE_SLOTS[capCol] : [];
@@ -117,7 +117,7 @@ export function CaptureScreen({ capCol, setCapCol, status, onShutter, onClose, a
   const isLive = camState === 'live';
   const isCaptured = camState === 'captured';
   const isDenied = camState === 'denied' || camState === 'unsupported';
-  const shutterDisabled = !capCol || (!isLive && !isCaptured) || status === 'recognizing';
+  const shutterDisabled = !capCol || !isLive;
 
   return (
     <div className="cz-capture">
@@ -137,12 +137,6 @@ export function CaptureScreen({ capCol, setCapCol, status, onShutter, onClose, a
               {col.short}
             </button>
           )}
-        </div>
-        <div style={{ display: 'flex', gap: 8, paddingTop: 2 }}>
-          <button className="cz-autoadd" data-on={autoAdd} onClick={() => setAutoAdd(!autoAdd)}>
-            <Icon name={autoAdd ? 'check' : 'plus'} size={14} stroke={2.4} />
-            {autoAdd ? 'Aggiungi subito' : 'Modifica prima di salvare'}
-          </button>
         </div>
       </div>
 
@@ -255,16 +249,6 @@ export function CaptureScreen({ capCol, setCapCol, status, onShutter, onClose, a
         </button>
       </div>
 
-      {/* ── Recognizing overlay ── */}
-      {status === 'recognizing' && (
-        <div className="cz-recog">
-          <div className="cz-spinner" />
-          <div style={{ textAlign: 'center' }}>
-            <div className="cz-recog-txt">Riconoscimento in corso…</div>
-            <div className="cz-recog-sub">{barcode ? 'Lettura del codice e ricerca nel database' : 'Analisi dell\'immagine'}</div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

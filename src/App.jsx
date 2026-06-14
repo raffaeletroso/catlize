@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Icon } from './icons.jsx';
-import { COLLECTIONS, COL, SEED_ITEMS, recognise } from './data.js';
+import { COLLECTIONS, COL, SEED_ITEMS, nid } from './data.js';
 import { HomeScreen } from './screens/HomeScreen.jsx';
 import { BrowseScreen } from './screens/BrowseScreen.jsx';
 import { CaptureScreen, DetailScreen } from './screens/CaptureScreen.jsx';
@@ -31,9 +31,7 @@ export default function App() {
   const [activeCol, setActiveCol] = useState('dischi');
   const [overlay, setOverlay] = useState(null);
   const [capCol, setCapCol] = useState(null);
-  const [capStatus, setCapStatus] = useState('idle');
   const [editing, setEditing] = useState(null);
-  const [autoAdd, setAutoAdd] = useState(true);
   const [browseAll, setBrowseAll] = useState(false);
   const [items, setItems] = useState(() => {
     try {
@@ -84,30 +82,14 @@ export default function App() {
 
   const openCapture = (forCol) => {
     setCapCol(forCol || null);
-    setCapStatus('idle');
     setOverlay('capture');
   };
 
   const shutter = (capturedImg) => {
-    if (capStatus === 'recognizing') return;
-    setCapStatus('recognizing');
-    setTimeout(() => {
-      const rec = recognise(capCol);
-      if (capturedImg) rec._photo = capturedImg;
-      if (autoAdd) {
-        const saved = { ...rec }; delete saved._new;
-        setItems((p) => [...p, saved]);
-        setActiveCol(capCol);
-        setEditing({ item: saved, mode: 'saved', source: 'capture' });
-        setOverlay('detail');
-        setCapStatus('idle');
-        showToast(`Salvato in ${COL[capCol].name}`);
-      } else {
-        setEditing({ item: rec, mode: 'new', source: 'capture' });
-        setOverlay('detail');
-        setCapStatus('idle');
-      }
-    }, 1650);
+    const blank = { id: nid(), collection: capCol, _new: true };
+    if (capturedImg) blank._photo = capturedImg;
+    setEditing({ item: blank, mode: 'new', source: 'capture' });
+    setOverlay('detail');
   };
 
   const onDetailChange = (patch) => {
@@ -227,9 +209,8 @@ export default function App() {
 
           {overlay === 'capture' && (
             <div className="cz-overlay">
-              <CaptureScreen capCol={capCol} setCapCol={(id) => { setCapCol(id); setCapStatus('idle'); }}
-                status={capStatus} onShutter={shutter} onClose={() => setOverlay(null)}
-                autoAdd={autoAdd} setAutoAdd={setAutoAdd} />
+              <CaptureScreen capCol={capCol} setCapCol={setCapCol}
+                onShutter={shutter} onClose={() => setOverlay(null)} />
             </div>
           )}
           {overlay === 'detail' && editing && (
