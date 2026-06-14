@@ -4,7 +4,7 @@ import { COLLECTIONS, COL, SEED_ITEMS, nid } from './data.js';
 import { HomeScreen } from './screens/HomeScreen.jsx';
 import { BrowseScreen } from './screens/BrowseScreen.jsx';
 import { CaptureScreen, DetailScreen } from './screens/CaptureScreen.jsx';
-import { isAuthenticated, requestToken, revokeToken } from './auth.js';
+import { isAuthenticated, requestToken, revokeToken, restoreSession } from './auth.js';
 import { saveCatalogToDrive, loadCatalogFromDrive, saveImageToDrive, resetDriveCache } from './drive.js';
 
 const DEVICES = {
@@ -58,6 +58,32 @@ export default function App() {
     const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener('resize', on);
     return () => window.removeEventListener('resize', on);
+  }, []);
+
+  // Restore Drive session silently on startup (after GIS script loads)
+  useEffect(() => {
+    let cancelled = false;
+    function attempt() {
+      if (!window.google?.accounts?.oauth2) return;
+      restoreSession().then((token) => {
+        if (cancelled || !token) return;
+        setDriveAuthed(true);
+        loadCatalogFromDrive().then((remote) => {
+          if (cancelled || !remote || !Array.isArray(remote) || !remote.length) return;
+          setItems(remote);
+          try { localStorage.setItem('catlize_items', JSON.stringify(remote)); } catch {}
+        }).catch(() => {});
+      });
+    }
+    // GIS loads asynchronously — poll until ready (max ~5s)
+    let tries = 0;
+    const iv = setInterval(() => {
+      if (window.google?.accounts?.oauth2 || ++tries > 25) {
+        clearInterval(iv);
+        attempt();
+      }
+    }, 200);
+    return () => { cancelled = true; clearInterval(iv); };
   }, []);
 
   // localStorage fallback — always keep in sync
