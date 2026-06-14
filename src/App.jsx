@@ -155,6 +155,29 @@ export default function App() {
     showToast('Google Drive scollegato');
   }, []);
 
+  // History management for device back button
+  const appStateRef = useRef({ base: 'home', overlay: null, editing: null });
+  useEffect(() => { appStateRef.current = { base, overlay, editing }; }, [base, overlay, editing]);
+
+  useEffect(() => {
+    history.replaceState({ catlize: true }, '');
+    history.pushState({ catlize: true }, '');
+    const onPop = () => {
+      history.pushState({ catlize: true }, ''); // re-push to stay in app
+      const { overlay: o, base: b, editing: ed } = appStateRef.current;
+      if (o === 'detail') {
+        setOverlay(null);
+        if (ed?.source === 'capture') { setActiveCol(ed.item.collection); setBrowseAll(false); setBase('browse'); }
+      } else if (o === 'capture') {
+        setOverlay(null);
+      } else if (b === 'browse') {
+        setBase('home');
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   const goHome = () => { setOverlay(null); setBase('home'); };
   const openCollection = (id) => { setActiveCol(id); setBrowseAll(false); setBase('browse'); setQuery(''); setOverlay(null); };
   const goBrowse = () => { setOverlay(null); setBase('browse'); };
